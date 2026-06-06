@@ -102,7 +102,11 @@ impl ToolRouter {
                 call_id,
                 ..
             } => {
-                let tool_name = ToolName::new(namespace, name);
+                let tool_name = if is_apply_patch_function_call(namespace.as_deref(), &name) {
+                    ToolName::plain("apply_patch")
+                } else {
+                    ToolName::new(namespace, name)
+                };
                 Ok(Some(ToolCall {
                     tool_name,
                     call_id,
@@ -221,6 +225,10 @@ impl ToolRouter {
             .dispatch_any_with_terminal_outcome(invocation, terminal_outcome_reached)
             .await
     }
+}
+
+fn is_apply_patch_function_call(namespace: Option<&str>, name: &str) -> bool {
+    name == "apply_patch" && matches!(namespace, None | Some("functions") | Some("functions."))
 }
 
 pub(crate) fn extension_tool_executors(

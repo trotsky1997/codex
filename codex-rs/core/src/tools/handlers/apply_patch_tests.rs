@@ -60,6 +60,42 @@ async fn pre_tool_use_payload_uses_freeform_patch_input() {
 }
 
 #[tokio::test]
+async fn pre_tool_use_payload_uses_function_patch_input() {
+    let patch = sample_patch();
+    let payload = ToolPayload::Function {
+        arguments: patch.to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler::default();
+
+    assert_eq!(
+        handler.pre_tool_use_payload(&invocation),
+        Some(PreToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_input: json!({ "command": patch }),
+        })
+    );
+}
+
+#[tokio::test]
+async fn pre_tool_use_payload_extracts_function_command_argument() {
+    let patch = sample_patch();
+    let payload = ToolPayload::Function {
+        arguments: json!({ "command": patch }).to_string(),
+    };
+    let invocation = invocation_for_payload(payload).await;
+    let handler = ApplyPatchHandler::default();
+
+    assert_eq!(
+        handler.pre_tool_use_payload(&invocation),
+        Some(PreToolUsePayload {
+            tool_name: HookToolName::apply_patch(),
+            tool_input: json!({ "command": patch }),
+        })
+    );
+}
+
+#[tokio::test]
 async fn post_tool_use_payload_uses_patch_input_and_tool_output() {
     let patch = sample_patch();
     let payload = ToolPayload::Custom {

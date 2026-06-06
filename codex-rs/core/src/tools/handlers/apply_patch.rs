@@ -258,8 +258,23 @@ fn write_permissions_for_paths(
 fn apply_patch_payload_command(payload: &ToolPayload) -> Option<String> {
     match payload {
         ToolPayload::Custom { input } => Some(input.clone()),
+        ToolPayload::Function { arguments } => {
+            Some(apply_patch_function_arguments_command(arguments))
+        }
         _ => None,
     }
+}
+
+fn apply_patch_function_arguments_command(arguments: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(arguments)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("command")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| arguments.to_string())
 }
 
 async fn effective_patch_permissions(
@@ -329,7 +344,7 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
             ..
         } = invocation;
 
-        let ToolPayload::Custom { input: patch_input } = payload else {
+        let Some(patch_input) = apply_patch_payload_command(&payload) else {
             return Err(FunctionCallError::RespondToModel(
                 "apply_patch handler received unsupported payload".to_string(),
             ));
@@ -458,7 +473,10 @@ impl ToolExecutor<ToolInvocation> for ApplyPatchHandler {
 
 impl CoreToolRuntime for ApplyPatchHandler {
     fn matches_kind(&self, payload: &ToolPayload) -> bool {
-        matches!(payload, ToolPayload::Custom { .. })
+        matches!(
+            payload,
+            ToolPayload::Custom { .. } | ToolPayload::Function { .. }
+        )
     }
 
     fn create_diff_consumer(&self) -> Option<Box<dyn ToolArgumentDiffConsumer>> {
@@ -481,6 +499,9 @@ impl CoreToolRuntime for ApplyPatchHandler {
         invocation.payload = match invocation.payload {
             ToolPayload::Custom { .. } => ToolPayload::Custom {
                 input: patch.to_string(),
+            },
+            ToolPayload::Function { .. } => ToolPayload::Function {
+                arguments: patch.to_string(),
             },
             payload => payload,
         };

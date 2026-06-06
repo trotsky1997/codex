@@ -172,6 +172,36 @@ async fn build_tool_call_uses_namespace_for_registry_name() -> anyhow::Result<()
 }
 
 #[tokio::test]
+async fn build_tool_call_canonicalizes_apply_patch_function_calls() -> anyhow::Result<()> {
+    let patch = "*** Begin Patch\n*** Add File: hello.txt\n+hello\n*** End Patch\n";
+
+    for namespace in [None, Some("functions"), Some("functions.")] {
+        let call = ToolRouter::build_tool_call(ResponseItem::FunctionCall {
+            id: None,
+            name: "apply_patch".to_string(),
+            namespace: namespace.map(str::to_string),
+            arguments: patch.to_string(),
+            call_id: format!("call-{}", namespace.unwrap_or("plain")),
+        })?
+        .expect("apply_patch function_call should produce a tool call");
+
+        assert_eq!(call.tool_name, ToolName::plain("apply_patch"));
+        assert_eq!(
+            call.call_id,
+            format!("call-{}", namespace.unwrap_or("plain"))
+        );
+        match call.payload {
+            ToolPayload::Function { arguments } => {
+                assert_eq!(arguments, patch);
+            }
+            other => panic!("expected function payload, got {other:?}"),
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn mcp_parallel_support_uses_handler_data() -> anyhow::Result<()> {
     let (_, turn) = make_session_and_context().await;
     let router = ToolRouter::from_turn_context(
